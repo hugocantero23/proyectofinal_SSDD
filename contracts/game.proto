@@ -8,52 +8,52 @@ package distributed_dice;
 //
 
 service GameService {
-  rpc CreateGame (###) returns (GameReply);
-  rpc JoinGame (###) returns (GameReply);
-  rpc GetState (###) returns (GameReply);
-  rpc Roll (###) returns (GameReply);
+  rpc CreateGame (CreateGameRequest) returns (GameReply);
+  rpc JoinGame (JoinGameRequest) returns (GameReply);
+  rpc GetState (GetStateRequest) returns (GameReply);
+  rpc Roll (RollRequest) returns (GameReply);
 }
 
-### CreateGameRequest {
-  ### name = ###;
-  ### player_count = ###;
+message CreateGameRequest {
+  string name = 1;
+  int32 player_count = 2;
 }
 
-### JoinGameRequest {
-  ### name = ###;
+message JoinGameRequest {
+  string name = 1;
 }
 
-### GetStateRequest {
-  ### game_id = ###;
+message GetStateRequest {
+  string game_id = 1;
 }
 
-### RollRequest {
-  ### game_id = ###;
-  ### player_id = ###;
+message RollRequest {
+  string game_id = 1;
+  string player_id = 2;
 }
 
-### GameReply {
-  GameState state = ###;
-  string player_id = ###;
-  ### first_die = ###;
-  ### second_die = ###;
-  string event_delivery_warning = ###;
+message GameReply {
+  GameState state = 1;
+  string player_id = 2;
+  int32 first_die = 3;
+  int32 second_die = 4;
+  string event_delivery_warning = 5;
 }
 
-### GameState {
-  string game_id = ###;
-  string name = ###;
-  ### capacity = ###;
-  GameStatus status = ###;
-  repeated ### players = ###;
-  ### current_player_id = ###;
-  ### winner_id = ###;
+message GameState {
+  string game_id = 1;
+  string name = 2;
+  int32 capacity = 3;
+  GameStatus status = 4;
+  repeated ### players = 5;
+  string current_player_id = 6;
+  string winner_id = 7;
 }
 
-### Player {
-  string player_id = ###;
-  ### number = ###;
-  ### score = ###;
+message Player {
+  string player_id = 1;
+  int32 number = 2;
+  int32 score = 3;
 }
 
 enum GameStatus {
@@ -62,20 +62,20 @@ enum GameStatus {
   GAME_STATUS_FINISHED = 2;
 }
 
-### TurnEvent {
-  string game_id = ###;
-  ### current_player_number = ###;
-  ### winner_player_number = ###;
+message TurnEvent {
+  string game_id = 1;
+  int32 current_player_number = 2;
+  int32 winner_player_number = 3;
 }
 
-### PlayerScore {
-  ### player_id = ###;
-  ### player_number = ###;
-  ### score = ###;
+message PlayerScore {
+  string player_id = 1;
+  int32 player_number = 2;
+  int32 score = 3;
 }
 
-### ScoresEvent {
-  ### game_id = ###;
-  repeated ### scores = ###;
-  ### winner_player_number = ###;
+message ScoresEvent {
+  string game_id = 1;
+  repeated int32 scores = 2;
+  int32 winner_player_number = 3;
 }
