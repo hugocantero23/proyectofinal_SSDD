@@ -76,6 +76,6 @@ message PlayerScore {
 
 message ScoresEvent {
   string game_id = 1;
-  repeated int32 scores = 2;
+  repeated PlayerScore scores = 2;
   int32 winner_player_number = 3;
 }
