@@ -45,7 +45,7 @@ message GameState {
   string name = 2;
   int32 capacity = 3;
   GameStatus status = 4;
-  repeated ### players = 5;
+  repeated Player players = 5;
   string current_player_id = 6;
   string winner_id = 7;
 }
