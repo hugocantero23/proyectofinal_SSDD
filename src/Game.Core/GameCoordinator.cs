@@ -12,12 +12,11 @@ public sealed class GameCoordinator
     public GameCoordinator(IDiceRoller diceRoller, IGameEventPublisher eventPublisher)
     {
         // a completar asignación de _diceRoller y _eventPublisher
+        _diceRoller = diceRoller ?? throw new ArgumentNullException(nameof(diceRoller));
+        _eventPublisher = eventPublisher ?? throw new ArgumentNullException(nameof(eventPublisher));
     }
 
-    public async Task<CreateGameResult> CreateGameAsync(
-        string name,
-        int playerCount,
-        CancellationToken cancellationToken = default)
+    public async Task<CreateGameResult> CreateGameAsync(string name, int playerCount, CancellationToken cancellationToken = default)
     {
         /*
         1. Espera el acceso a la operación. Adquiere el semáforo _operationGate de forma asíncrona con WaitAsync, pasando cancellationToken.
@@ -30,35 +29,104 @@ public sealed class GameCoordinator
         8. Prepara y devuelve el resultado. Crea una instantánea con GameSnapshots.Create(_game) y devuelve un CreateGameResult con el identificador de partida, el identificador del jugador y la instantánea, en ese orden.
         9. Libera el semáforo. En el bloque finally, llama a _operationGate.Release() para liberarlo tanto si la operación termina correctamente como si se produce una excepción.
         */
+
+        await _operationGate.WaitAsync(cancellationToken); //PASO 1: Espera el acceso a la operación. Adquiere el semáforo _operationGate de forma asíncrona con WaitAsync, pasando cancellationToken.
+        try
+        {
+            lock (_stateLock) //PASO 2: Protege el estado compartido. Una vez adquirido el semáforo, usa un bloque try y, dentro de él, entra en un lock sobre _stateLock para que las comprobaciones y la creación se hagan de forma coordinada.
+            {
+                if (string.IsNullOrWhiteSpace(name)) //PASO 3: Valida el nombre. Si name es nulo, está vacío o solo contiene espacios, lanza GameRuleException con GameError.InvalidName y el mensaje «El nombre de la partida es obligatorio.».
+                {
+                    throw new GameRuleException(GameError.InvalidName, "El nombre de la partida es obligatorio.");
+                }
+
+                if (playerCount < 2 || playerCount > 4) //PASO 4: Valida el número de jugadores. Si playerCount es menor que 2 o mayor que 4, lanza GameRuleException con GameError.InvalidPlayerCount y el mensaje «La partida debe tener entre 2 y 4 jugadores.».
+                {
+                    throw new GameRuleException(GameError.InvalidPlayerCount, "La partida debe tener entre 2 y 4 jugadores.");
+                }
+
+                if (_game != null && _game.Status != GameStatus.Finished) //PASO 5: Comprueba si ya hay una partida activa. Si _game existe y su estado no es Finished, lanza GameRuleException con GameError.GameAlreadyActive y el mensaje «Ya hay una partida activa.».
+                {
+                    throw new GameRuleException(GameError.GameAlreadyActive, "Ya hay una partida activa.");
+                }
+
+                var initialPlayer = new PlayerState(Guid.NewGuid(), 1); //PASO 6: Crea el jugador inicial con un GUID nuevo y el número de jugador 1
+                _game = new GameState(Guid.NewGuid(), name, playerCount, initialPlayer); //PASO 7: Crea la partida con un GUID nuevo, el nombre sin espacios al principio ni al final, el número de jugadores y el jugador inicial
+
+                var snapshot = GameSnapshots.Create(_game); //PASO 8: Prepara y devuelve el resultado. Crea una instantánea con GameSnapshots.Create(_game)
+                return new CreateGameResult(_game.Id, initialPlayer.Id, snapshot); //y devuelve un CreateGameResult con el identificador de partida, el identificador del jugador y la instantánea, en ese orden.
+            }
+        }
+        finally
+        {
+            _operationGate.Release(); //PASO 9: Libera el semáforo. En el bloque finally, llama a _operationGate.Release() para liberarlo tanto si la operación termina correctamente como si se produce una excepción.
+        }
     }
 
-    public async Task<JoinGameResult> JoinGameAsync(
-        string gameName,
-        CancellationToken cancellationToken = default)
+    public async Task<JoinGameResult> JoinGameAsync(string gameName, CancellationToken cancellationToken = default)
     {
         /*
         1. Espera el acceso a la operación. Adquiere _operationGate de forma asíncrona con WaitAsync, pasando cancellationToken.
         */
-        try{
-        /*
-        2. Prepara las variables. Dentro de un bloque try, declara una variable result de tipo JoinGameResult y una lista de solo lectura events de tipo GameEvent.
-        3. Protege el estado compartido. Entra en un lock sobre _stateLock para consultar y modificar la partida de forma coordinada.
-        4. Busca y comprueba la partida. Obtén la partida por nombre mediante GetGameByName(gameName). Si su estado no es WaitingForPlayers, lanza GameRuleException con GameError.GameFull y el mensaje «La partida ya no admite jugadores.».
-        5. Añade el jugador. Crea un PlayerState con un GUID nuevo y el número correspondiente a la cantidad actual de jugadores más uno. Después:
-            Añádelo a game.Players.
-            Regístralo en game.PlayersById usando su identificador como clave.
-            Incorpóralo a la cola game.TurnOrder.
-        6. Comprueba si se han ocupado todas las plazas.
-            Si el número de jugadores coincide con game.Capacity, cambia el estado a InProgress y llama a game.NotifyTurnChanged().
-            Prepara en events un TurnChangedEvent con el identificador de partida, el número del primer jugador de la cola —o null si no existe— y null como último argumento. Añade también un ScoresUpdatedEvent con el identificador de partida, las puntuaciones obtenidas mediante GameSnapshots.CreateScores(game) y null como último argumento.
-            Si todavía quedan plazas, asigna una lista vacía a events.
-        7. Prepara el resultado. Crea un JoinGameResult con el identificador del nuevo jugador y una instantánea obtenida mediante GameSnapshots.Create(game); guárdalo en result.
-        */
 
-            
+        await _operationGate.WaitAsync(cancellationToken);
+
+        try
+        {
+            /*
+            2. Prepara las variables. Dentro de un bloque try, declara una variable result de tipo JoinGameResult y una lista de solo lectura events de tipo GameEvent.
+            3. Protege el estado compartido. Entra en un lock sobre _stateLock para consultar y modificar la partida de forma coordinada.
+            4. Busca y comprueba la partida. Obtén la partida por nombre mediante GetGameByName(gameName). Si su estado no es WaitingForPlayers, lanza GameRuleException con GameError.GameFull y el mensaje «La partida ya no admite jugadores.».
+            5. Añade el jugador. Crea un PlayerState con un GUID nuevo y el número correspondiente a la cantidad actual de jugadores más uno. Después:
+                Añádelo a game.Players.
+                Regístralo en game.PlayersById usando su identificador como clave.
+                Incorpóralo a la cola game.TurnOrder.
+            6. Comprueba si se han ocupado todas las plazas.
+                Si el número de jugadores coincide con game.Capacity, cambia el estado a InProgress y llama a game.NotifyTurnChanged().
+                Prepara en events un TurnChangedEvent con el identificador de partida, el número del primer jugador de la cola —o null si no existe— y null como último argumento. Añade también un ScoresUpdatedEvent con el identificador de partida, las puntuaciones obtenidas mediante GameSnapshots.CreateScores(game) y null como último argumento.
+                Si todavía quedan plazas, asigna una lista vacía a events.
+            7. Prepara el resultado. Crea un JoinGameResult con el identificador del nuevo jugador y una instantánea obtenida mediante GameSnapshots.Create(game); guárdalo en result.
+            */
+
+            JoinGameResult result; //PASO 2: Prepara las variables. Dentro de un bloque try, declara una variable result de tipo JoinGameResult y una lista de solo lectura events de tipo GameEvent.
+            IReadOnlyList<GameEvent> events;
+
+            lock (_stateLock)
+            {
+                var game = GetGameByName(gameName); //PASO 4: Busca y comprueba la partida. Obtén la partida por nombre mediante GetGameByName(gameName). Si su estado no es WaitingForPlayers, lanza GameRuleException con GameError.GameFull y el mensaje «La partida ya no admite jugadores.».
+                if (game.Status != GameStatus.WaitingForPlayers)
+                {
+                    throw new GameRuleException(GameError.GameFull, "La partida ya no admite jugadores.");
+                }
+
+                //PASO 5: Añade el jugador. Crea un PlayerState con un GUID nuevo y el número correspondiente a la cantidad actual de jugadores más uno. Después:
+                var newPlayer = new PlayerState(Guid.NewGuid(), game.Players.Count + 1);
+                game.Players.Add(newPlayer);
+                game.PlayersById[newPlayer.Id] = newPlayer;
+                game.TurnOrder.Enqueue(newPlayer);
+
+                //PASO 6: Comprueba si se han ocupado todas las plazas.
+                if (game.Players.Count == game.Capacity)
+                {
+                    game.Status = GameStatus.InProgress; // Cambia el estado a InProgress
+                    game.NotifyTurnChanged();  // Llama a game.NotifyTurnChanged() para notificar el cambio de turno
+                    events = new List<GameEvent>
+                    {
+                        new TurnChangedEvent(game.Id, game.TurnOrder.TryPeek(out var firstPlayer) ? firstPlayer?.Number : null, null),
+                        new ScoresUpdatedEvent(game.Id, GameSnapshots.CreateScores(game), null)
+                    };
+                }
+                else
+                {
+                    events = Array.Empty<GameEvent>(); // Si todavía quedan plazas, asigna una lista vacía a events.
+                }
+
+                result = new JoinGameResult(newPlayer.Id, GameSnapshots.Create(game)); //PASO 7: Prepara el resultado. Crea un JoinGameResult con el identificador del nuevo jugador y una instantánea obtenida mediante GameSnapshots.Create(game); guárdalo en result.
+            }
+
             var deliveryWarning = await PublishEventsAsync(events, cancellationToken);
             return result with { EventDeliveryWarning = deliveryWarning };
-            
+
         }
         finally
         {
