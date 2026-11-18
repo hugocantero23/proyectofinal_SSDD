@@ -5,7 +5,7 @@ using Grpc.Net.Client;
 using CoreGameStatus = Game.Core.GameStatus;
 using ProtoGameStatus = Game.Contracts.GameStatus;
 
-namespace Game.Client;
+namespace Game.Client; 
 
 public sealed class GrpcGameClient : IPlayerGameClient, IAsyncDisposable
 {
@@ -27,16 +27,35 @@ public sealed class GrpcGameClient : IPlayerGameClient, IAsyncDisposable
             1. Prepara la solicitud gRPC. Crea un objeto CreateGameRequest y asigna:
                 A Name, el nombre de la partida recibido en el parámetro name.
                 A PlayerCount, el número de jugadores recibido en playerCount.
+            */
+            var newGameRequest = new CreateGameRequest
+            {
+                Name = name,
+                PlayerCount = playerCount
+            };
+
+            /*
             2. Llama al servidor. Usa _client.CreateGameAsync con la solicitud anterior y pasa cancellationToken como token de cancelación. Espera la respuesta con await y guárdala en una variable, por ejemplo reply.
+            */
+            var reply = await _client.CreateGameAsync(newGameRequest, cancellationToken: cancellationToken);
+
+            /*
             3. Convierte el estado recibido. La respuesta contiene el estado de la partida en reply.State, expresado con los tipos del contrato gRPC. Pásalo a ToSnapshot y guarda el resultado en state, que utiliza los modelos de la aplicación.
+            */
+            var state = ToSnapshot(reply.State);
 
+            /*
             4. Obtén el identificador del jugador. El servidor devuelve reply.PlayerId como texto. Pásalo a ParseRequiredGuid junto con "jugador" para obtener un GUID obligatorio y detectar un identificador inválido.
+            */
+            var playerId = ParseRequiredGuid(reply.PlayerId, "jugador");
 
+            /*
             5. Devuelve el resultado. Crea un CreateGameResult con estos tres datos, en orden:
                 state.Id: identificador de la partida recién creada.
                 ParseRequiredGuid(reply.PlayerId, "jugador"): El GUID del jugador obtenido en el paso anterior.
                 state: la instantánea completa del estado inicial.
             */
+            return new CreateGameResult(state.Id, playerId, state);
         }, cancellationToken);
 
     public Task<JoinGameResult> JoinGameAsync(string name, CancellationToken cancellationToken) =>
@@ -44,10 +63,24 @@ public sealed class GrpcGameClient : IPlayerGameClient, IAsyncDisposable
         {
             /*
             1. Prepara la solicitud gRPC. Crea un objeto JoinGameRequest y asigna a su propiedad Name el nombre de la partida recibido en el parámetro name.
+           */
+
+           /*
             2. Llama al servidor. Usa _client.JoinGameAsync con la solicitud anterior y pasa cancellationToken como token de cancelación. Espera la respuesta con await y guárdala en una variable, por ejemplo reply.
+           */
+
+           /*
             3. Obtén el identificador del jugador. El servidor devuelve reply.PlayerId como texto. Pásalo a ParseRequiredGuid junto con "jugador" para obtener un GUID obligatorio y detectar un identificador inválido.
+           */
+           /*
             4. Convierte el estado recibido. Pasa reply.State, expresado con los tipos del contrato gRPC, a ToSnapshot para obtener una instantánea con los modelos de la aplicación.
+           */
+
+           /*
             5. Procesa la advertencia. Pasa reply.EventDeliveryWarning a EmptyToNull para convertir una advertencia vacía en null.
+           */
+
+           /*
             6. Devuelve el resultado. Crea un JoinGameResult con estos tres datos, en orden:
                 El GUID del jugador obtenido en el paso 3.
                 La instantánea del estado obtenida en el paso 4.
