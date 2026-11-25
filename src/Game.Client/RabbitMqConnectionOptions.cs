@@ -2,14 +2,24 @@ using Microsoft.Extensions.Configuration;
 
 namespace Game.Client;
 
-public sealed record RabbitMqConnectionOptions(string Host, string UserName, string Password, int Port = 5672)
+public sealed record RabbitMqConnectionOptions(
+    string Host,
+    string UserName,
+    string Password,
+    int Port = 5672,
+    string ExchangeName = "distributed-dice",
+    string TurnRoutingKey = "game.turn",
+    string ScoresRoutingKey = "game.scores")
 {
     public static RabbitMqConnectionOptions FromConfiguration(IConfiguration configuration) =>
         new(
             ReadRequired(configuration, "Host", "RABBITMQ_HOST"),
             ReadRequired(configuration, "UserName", "RABBITMQ_USERNAME"),
             ReadRequired(configuration, "Password", "RABBITMQ_PASSWORD"),
-            ReadPort(configuration));
+            ReadPort(configuration),
+            ReadRequired(configuration, "ExchangeName", "RABBITMQ_EXCHANGE_NAME"),
+            ReadRequired(configuration, "TurnRoutingKey", "RABBITMQ_TURN_ROUTING_KEY"),
+            ReadRequired(configuration, "ScoresRoutingKey", "RABBITMQ_SCORES_ROUTING_KEY"));
 
     private static int ReadPort(IConfiguration configuration)
     {
